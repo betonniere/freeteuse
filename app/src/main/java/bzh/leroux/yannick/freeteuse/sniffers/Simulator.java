@@ -42,9 +42,9 @@ public class Simulator extends FreeboxSniffer
       public void onReceive (Context context,
                              Intent  intent)
       {
-        Freebox freebox = new Freebox (context,
-                                       intent.getStringExtra ("ip"),
-                                       35830);
+        Freebox freebox = new Freebox (intent.getStringExtra ("ip"),
+                                       35830,
+                                       null);
 
         onFreeboxDetected (freebox);
       }

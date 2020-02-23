@@ -16,6 +16,8 @@
 
 package bzh.leroux.yannick.freeteuse.sniffers;
 
+import android.os.Handler;
+
 import bzh.leroux.yannick.freeteuse.Freebox;
 
 public class FreeboxSniffer
@@ -26,6 +28,7 @@ public class FreeboxSniffer
                             FreeboxSniffer sniffer);
   }
 
+  private Handler  mHandler;
   private Listener mListener;
   private String   mName;
 
@@ -34,6 +37,7 @@ public class FreeboxSniffer
                   Listener listener)
   {
     mName     = name;
+    mHandler  = new Handler ();
     mListener = listener;
   }
 
@@ -50,11 +54,16 @@ public class FreeboxSniffer
   }
 
   // ---------------------------------------------------
-  void onFreeboxDetected (Freebox freebox)
+  void onFreeboxDetected (final Freebox freebox)
   {
     if (mListener != null) {
-      mListener.onFreeboxDetected (freebox,
-              this);
+      mHandler.post (new Runnable () {
+        @Override
+        public void run () {
+          mListener.onFreeboxDetected (freebox,
+                                       FreeboxSniffer.this);
+        }
+      });
     }
   }
 }

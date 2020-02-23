@@ -16,22 +16,27 @@
 
 package bzh.leroux.yannick.freeteuse;
 
-import android.content.Context;
+import android.app.Activity;
 import android.content.SharedPreferences;
+import android.content.res.Resources;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import bzh.leroux.yannick.freeteuse.sniffers.DnsServiceSniffer;
-import bzh.leroux.yannick.freeteuse.sniffers.FreeboxSniffer;
 import bzh.leroux.yannick.freeteuse.sniffers.BonjourSniffer;
+import bzh.leroux.yannick.freeteuse.sniffers.BrutusSniffer;
+import bzh.leroux.yannick.freeteuse.sniffers.FreeboxSniffer;
 import bzh.leroux.yannick.freeteuse.sniffers.Simulator;
 
 class Home implements FreeboxSniffer.Listener
@@ -42,10 +47,11 @@ class Home implements FreeboxSniffer.Listener
     void onFreeboxDetected (Freebox freebox);
   }
 
-  private DnsServiceSniffer mDnsServiceSniffer;
-  private BonjourSniffer    mBonjourSniffer;
+  private BrutusSniffer     mBrutusSniffer;
+  private BonjourSniffer    mPlayerSniffer;
+  private BonjourSniffer    mGatewaySniffer;
   private Simulator         mSimulator;
-  private Context           mContext;
+  private Activity          mActivity;
   private SharedPreferences mPreferences;
   private List<Freebox>     mBoxes;
   private Listener          mListener;
@@ -53,14 +59,14 @@ class Home implements FreeboxSniffer.Listener
   private Logger            mLogger;
 
   // ---------------------------------------------------
-  Home (Context           context,
+  Home (Activity          activity,
         Listener          listener,
         SharedPreferences preferences)
   {
-    mContext     = context;
+    mActivity    = activity;
     mListener    = listener;
     mPreferences = preferences;
-    mPainter     = new Painter (context);
+    mPainter     = new Painter (activity);
     mBoxes       = new ArrayList<> ();
   }
 
@@ -81,8 +87,7 @@ class Home implements FreeboxSniffer.Listener
 
         for (int i = 0; i < array.length (); i++)
         {
-          Freebox freebox = new Freebox (mContext,
-                                         array.getJSONObject (i));
+          Freebox freebox = new Freebox (array.getJSONObject (i));
 
           if (freebox.isConsistent ())
           {
@@ -112,7 +117,7 @@ class Home implements FreeboxSniffer.Listener
     {
       CharSequence text = String.valueOf (mBoxes.size ());
 
-      Toast toast = Toast.makeText (mContext,
+      Toast toast = Toast.makeText (mActivity,
                                     text + " Freebox",
                                     Toast.LENGTH_SHORT);
       toast.show ();
@@ -122,7 +127,7 @@ class Home implements FreeboxSniffer.Listener
   // ---------------------------------------------------
   void discloseBoxes ()
   {
-    mLogger = new Logger (mContext,
+    mLogger = new Logger (mActivity,
                           "0x59",
                           "Home");
 
@@ -130,23 +135,27 @@ class Home implements FreeboxSniffer.Listener
 
     recoverSavedBoxes ();
 
-    mDnsServiceSniffer = new DnsServiceSniffer (mContext, this);
-    mDnsServiceSniffer.start ();
+    mBrutusSniffer = new BrutusSniffer (mActivity,this);
+    mBrutusSniffer.start (24322);
 
-    mBonjourSniffer = new BonjourSniffer (mContext, this);
-    mBonjourSniffer.start ("_hid._udp");
-    //mBonjourSniffer.start ("_services._dns-sd._udp");
+    mPlayerSniffer = new BonjourSniffer (mActivity, this);
+    mPlayerSniffer.start ("_hid._udp");
+//    mBonjourSniffer.start ("_services._dns-sd._udp");
 
-    mSimulator = new Simulator (mContext, this);
+    mGatewaySniffer = new BonjourSniffer (mActivity, this);
+    mGatewaySniffer.start ("_fbx-api._tcp");
+
+    mSimulator = new Simulator (mActivity, this);
     mSimulator.start ();
   }
 
   // ---------------------------------------------------
   void concealBoxes ()
   {
-    mDnsServiceSniffer.stop ();
-    mBonjourSniffer.stop    ();
-    mSimulator.stop         ();
+    mBrutusSniffer.stop  ();
+    mPlayerSniffer.stop ();
+    mGatewaySniffer.stop ();
+    mSimulator.stop      ();
 
     save ();
 
@@ -179,24 +188,42 @@ class Home implements FreeboxSniffer.Listener
   public void onFreeboxDetected (Freebox        freebox,
                                  FreeboxSniffer sniffer)
   {
-    for (Freebox box : mBoxes)
+    if (freebox.descriptionContains ("._fbx-api._tcp"))
     {
-      if (freebox.equals (box))
-      {
-        mLogger.Log ("- " + sniffer + "/" + freebox);
+      String boxModel = freebox.getDescriptionField ("box_model");
 
-        box.detected ();
-        mListener.onFreeboxDetected (box);
-        return;
+      mLogger.Log ("- box_model = " + boxModel);
+
+      try
+      {
+        changeMulticlickShortcuts (boxModel);
+      }
+      catch (JSONException | IOException e)
+      {
+        mLogger.Log ("- No shortcuts");
       }
     }
-
-    if (freebox.getColor () == null)
+    else
     {
-      freebox.setColor (mPainter.getColor ());
+      for (Freebox box : mBoxes)
+      {
+        if (freebox.equals (box))
+        {
+          mLogger.Log ("- " + sniffer + "/" + freebox);
+
+          box.detected ();
+          mListener.onFreeboxDetected (box);
+          return;
+        }
+      }
+
+      if (freebox.getColor () == null)
+      {
+        freebox.setColor (mPainter.getColor ());
+      }
+      mBoxes.add (freebox);
+      mListener.onFreeboxDetected (freebox);
     }
-    mBoxes.add (freebox);
-    mListener.onFreeboxDetected (freebox);
   }
 
   // ---------------------------------------------------
@@ -268,5 +295,46 @@ class Home implements FreeboxSniffer.Listener
     }
 
     return previous;
+  }
+
+  // ---------------------------------------------------
+  private void changeMulticlickShortcuts (String boxModel) throws JSONException, IOException
+  {
+    if (boxModel != null)
+    {
+      String[]    shortModel = boxModel.split ("-");
+      InputStream stream     = mActivity.getAssets ().open (shortModel[0] + "/shortcuts.json");
+      int         size       = stream.available ();
+      byte[]      buffer     = new byte[size];
+
+      if (stream.read (buffer) != -1)
+      {
+        Resources resources     = mActivity.getResources();
+        String    content       = new String    (buffer, StandardCharsets.UTF_8);
+        JSONArray jsonShortcuts = new JSONArray (content);
+
+        for (int i = 0; i < jsonShortcuts.length (); i++)
+        {
+          JSONObject jsonShortcut = jsonShortcuts.getJSONObject (i);
+          String     shortcutName = jsonShortcut.keys ().next ();
+          String     keySequence  = jsonShortcut.getString (shortcutName);
+
+          if (!keySequence.isEmpty ())
+          {
+            int viewId = resources.getIdentifier (shortcutName,
+                                                  "id",
+                                                  mActivity.getPackageName ());
+
+            if (viewId != 0)
+            {
+              View view = mActivity.findViewById (viewId);
+
+              view.setTag ("onMultiClick:" + keySequence);
+            }
+          }
+        }
+      }
+      stream.close ();
+    }
   }
 }

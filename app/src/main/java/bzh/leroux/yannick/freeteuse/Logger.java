@@ -19,9 +19,9 @@ public class Logger {
   private CheatCode    mCheatCode;
 
   // ---------------------------------------------------
-  public Logger (Context context,
-                 String  keySelector,
-                 String  name)
+  Logger (Context context,
+          String  keySelector,
+          String  name)
   {
     mContext   = context;
     mName      = name;

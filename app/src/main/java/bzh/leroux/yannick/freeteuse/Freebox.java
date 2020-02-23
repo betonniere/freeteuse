@@ -16,13 +16,15 @@
 
 package bzh.leroux.yannick.freeteuse;
 
-import android.content.Context;
 import android.os.Handler;
 import android.util.Log;
 import android.view.KeyEvent;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Freebox
 {
@@ -34,14 +36,14 @@ public class Freebox
   private long    mRcu;
   private String  mAddress;
   private int     mPort;
+  private String  mDescription;
   private boolean mHasFocus;
   private boolean mReachable;
   private String  mColor;
   private Thread  mStatusLooper;
 
   // ---------------------------------------------------
-  Freebox (Context context,
-           JSONObject json)
+  Freebox (JSONObject json)
   {
     try
     {
@@ -57,15 +59,44 @@ public class Freebox
   }
 
   // ---------------------------------------------------
-  public Freebox (Context context,
-                  String  address,
-                  int     port)
+  public Freebox (String address,
+                  int    port,
+                  String description)
   {
-    mReachable = true;
-    mAddress   = address;
-    mPort      = port;
+    mReachable   = true;
+    mAddress     = address;
+    mPort        = port;
+    mDescription = description;
 
     Log.d (Freeteuse.TAG, mAddress);
+  }
+
+  // ---------------------------------------------------
+  boolean descriptionContains (String keyword)
+  {
+    if (mDescription != null)
+    {
+      return mDescription.contains (keyword);
+    }
+
+    return false;
+  }
+
+  // ---------------------------------------------------
+  String getDescriptionField (String field)
+  {
+    if (mDescription != null)
+    {
+      Pattern pattern = Pattern.compile (field + "=(\\p{Print}*)");
+      Matcher matcher = pattern.matcher (mDescription);
+
+      if (matcher.find ())
+      {
+        return matcher.group (1);
+      }
+    }
+
+    return null;
   }
 
   // ---------------------------------------------------

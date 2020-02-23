@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 
 def versionMajor = 1
 def versionMinor = 9
-def versionPatch = 5
+def versionPatch = 8
 
 android {
     compileSdkVersion 28
@@ -53,6 +53,4 @@ repositories {
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation 'org.jmdns:jmdns:3.5.5'
-    implementation 'org.slf4j:slf4j-android:1.7.7'
 }
